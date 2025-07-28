@@ -49,26 +49,44 @@ class BenchmarkExecutor:
         Args:
             instance: Target instance for benchmark execution.
         """
-        benchmark_command = (
+        # Export environment variables individually for clarity and debugging
+        # Commands to set up environment variables and change directory
+        setup_commands = (
+            f"set -e && "  # Exit on any error
+            f"echo '🔍 Starting benchmark command execution...' && "
             f"cd /app && "
-            f"TEST_ITERATIONS={self.config.test_iterations} "
-            f"CONTEXT_START={self.config.context_start} "
-            f"CONTEXT_END={self.config.context_end} "
-            f"CONTEXT_MULTIPLIER={self.config.context_multiplier} "
-            f"OLLAMA_MODEL={self.config.ollama_model} "
-            f"OLLAMA_FLASH_ATTENTION={self.config.ollama_flash_attention} "
-            f"OLLAMA_KEEP_ALIVE={self.config.ollama_keep_alive} "
-            f"OLLAMA_KV_CACHE_TYPE={self.config.ollama_kv_cache_type} "
-            f"OLLAMA_MAX_LOADED_MODELS={self.config.ollama_max_loaded_models} "
-            f"OLLAMA_NUM_GPU={self.config.ollama_num_gpu} "
-            f"OLLAMA_NUM_PARALLEL={self.config.ollama_num_parallel} "
-            f"OUTPUT_PATH={self.config.remote_results_path} "
-            f"uv run scripts/llm_benchmark.py"
+            f"echo '📁 Changed to /app directory' && "
+            f"export PYTHONUNBUFFERED=1 && "
+            f"export TEST_ITERATIONS={self.config.test_iterations} && "
+            f"export CONTEXT_START={self.config.context_start} && "
+            f"export CONTEXT_END={self.config.context_end} && "
+            f"export CONTEXT_MULTIPLIER={self.config.context_multiplier} && "
+            f"export OLLAMA_MODEL='{self.config.ollama_model}' && "
+            f"export OLLAMA_FLASH_ATTENTION={self.config.ollama_flash_attention} && "
+            f"export OLLAMA_KEEP_ALIVE={self.config.ollama_keep_alive} && "
+            f"export OLLAMA_KV_CACHE_TYPE={self.config.ollama_kv_cache_type} && "
+            f"export OLLAMA_MAX_LOADED_MODELS={self.config.ollama_max_loaded_models} && "
+            f"export OLLAMA_NUM_GPU={self.config.ollama_num_gpu} && "
+            f"export OLLAMA_NUM_PARALLEL={self.config.ollama_num_parallel} && "
+            f"export OUTPUT_PATH={self.config.remote_results_path} && "
+            f"echo '⚙️ Environment variables exported'"
         )
 
-        logger.info("⚡ Starting benchmark execution...")
-        logger.debug("Benchmark command: %s", benchmark_command)
-        instance.execute_command_streaming(benchmark_command, timeout=1800)  # 30 minutes
+        # Command to run the benchmark script
+        benchmark_script_command = (
+            "set -e && "  # Exit on any error
+            "cd /app && "
+            "echo '🚀 Starting benchmark script...' && "
+            "uv run scripts/llm_benchmark.py"
+        )
+
+        logger.info("⚡ Starting setup commands execution...")
+        logger.debug("Setup command: %s", setup_commands)
+        instance.execute_command_streaming(setup_commands, timeout=60)  # Short timeout for setup
+
+        logger.info("⚡ Starting benchmark script execution...")
+        logger.debug("Benchmark script command: %s", benchmark_script_command)
+        instance.execute_command_streaming(benchmark_script_command, timeout=1800)  # 30 minutes
 
 
 class RemoteBenchmarkOrchestrator:

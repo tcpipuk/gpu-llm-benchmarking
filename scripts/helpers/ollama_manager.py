@@ -44,8 +44,6 @@ class OllamaManager:
         Returns:
             Ollama version string for results folder naming.
         """
-        logger.info("🧠 Configuring Ollama service...")
-
         # Start Ollama service with environment variables in background
         logger.info("⚡ Starting Ollama server in background")
         start_command = (
@@ -62,7 +60,6 @@ class OllamaManager:
         instance.execute_command_background(start_command)
 
         # Wait for Ollama server to be ready and get version
-        logger.info("⏰ Waiting for server readiness")
         version = self._get_ollama_version(instance)
 
         # Pull the model with streaming output for real-time progress monitoring
@@ -88,10 +85,14 @@ class OllamaManager:
             actual_response = response_data.get("response", "No response field found")
             logger.debug("Test generation response: %r", actual_response)
         except (json.JSONDecodeError, AttributeError):
-            logger.debug(
-                "Test generation response (raw): %s",
-                response[:100] + "..." if len(response) > 100 else response,
+            # Truncate response for debug logging
+            max_debug_length = 100
+            truncated_response = (
+                response[:max_debug_length] + "..."
+                if len(response) > max_debug_length
+                else response
             )
+            logger.debug("Test generation response (raw): %s", truncated_response)
         logger.info("🎉 Test generation complete - model should now be in VRAM")
 
         logger.info("🚀 Ollama ready for testing with model preloaded")
@@ -109,7 +110,7 @@ class OllamaManager:
         Raises:
             RuntimeError: If the server doesn't become ready within the timeout.
         """
-        logger.info("⏳ Waiting for Ollama server to start...")
+        logger.info("⏳ Waiting for Ollama server...")
         max_attempts = 12  # 60 seconds total (5 second intervals)
         debug_threshold = 2  # After 10 seconds (2 attempts), check logs
 

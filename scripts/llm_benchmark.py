@@ -105,6 +105,7 @@ class BenchmarkRunner:
                 model=self.config.model,
                 prompt="Hello",
                 context_length=self.config.context_start,
+                timeout=30,  # Short timeout for warmup
             )
             warmup_tokens = warmup_response.get("eval_count", 0)
             logger.info("✅ Ollama connection verified - generated %s tokens", warmup_tokens)
@@ -115,6 +116,115 @@ class BenchmarkRunner:
 
         # Save system info
         self.results_manager.save_system_info()
+
+    def _diagnose_ollama_failure(self) -> None:
+        """Diagnose Ollama failure with comprehensive system checks."""
+        logger.info("🔍 Diagnosing Ollama status...")
+
+        try:
+            # Check if Ollama process is still running
+            ps_result = subprocess.run(
+                ["ps", "aux"], check=False, capture_output=True, text=True, timeout=5
+            )
+            ollama_processes = [
+                line for line in ps_result.stdout.split("\n") if "ollama" in line.lower()
+            ]
+            if ollama_processes:
+                logger.info("🔄 Ollama processes found:")
+                for proc in ollama_processes:
+                    logger.info("   %s", proc.strip())
+            else:
+                logger.warning("⚠️ No Ollama processes found!")
+
+            # Try to check Ollama API status
+            logger.info("🌐 Checking Ollama API status...")
+            status_result = subprocess.run(
+                ["curl", "-s", "http://localhost:11434/api/tags"],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if status_result.returncode == 0:
+                logger.info("✅ Ollama API responded: %s", status_result.stdout[:200])
+            else:
+                logger.error("❌ Ollama API not responding")
+
+            # Check system resource usage
+            self._log_system_resources()
+
+            # Try to get Ollama logs from multiple sources
+            self._check_ollama_logs()
+
+            # Check GPU status
+            self._check_gpu_status()
+
+        except Exception as diag_e:
+            logger.warning("⚠️ Could not run diagnostics: %s", diag_e)
+
+    def _log_system_resources(self) -> None:
+        """Log current system resource usage."""
+        logger.info("💾 System resources:")
+        free_result = subprocess.run(
+            ["free", "-h"], check=False, capture_output=True, text=True, timeout=5
+        )
+        if free_result.returncode == 0:
+            for line in free_result.stdout.strip().split("\n"):
+                logger.info("   %s", line)
+
+    def _check_ollama_logs(self) -> None:
+        """Check Ollama logs from multiple sources."""
+        logger.info("📋 Searching for Ollama logs...")
+
+        # Check systemd logs
+        log_result = subprocess.run(
+            ["journalctl", "-u", "ollama", "-n", "50", "--no-pager"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if log_result.returncode == 0 and log_result.stdout.strip():
+            logger.info("📜 Systemd Ollama logs:")
+            for line in log_result.stdout.strip().split("\n")[-10:]:
+                logger.info("   %s", line)
+        else:
+            logger.info("📜 No systemd logs found")
+
+        # Check for Ollama logs in common locations
+        log_locations = [
+            Path("/var/log/ollama.log"),
+            Path("/root/.ollama/logs/server.log"),
+            Path("/home/ollama/.ollama/logs/server.log"),
+        ]
+
+        for log_path in log_locations:
+            try:
+                with log_path.open(encoding="utf-8") as f:
+                    lines = f.readlines()
+                    if lines:
+                        logger.info("📜 Ollama logs from %s:", log_path)
+                        for line in lines[-5:]:
+                            logger.info("   %s", line.strip())
+                        break
+            except (FileNotFoundError, PermissionError):
+                continue
+
+    def _check_gpu_status(self) -> None:
+        """Check current GPU status and utilization."""
+        nvidia_result = subprocess.run(
+            [
+                "nvidia-smi",
+                "--query-gpu=utilization.gpu,memory.used,memory.total",
+                "--format=csv,noheader,nounits",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if nvidia_result.returncode == 0:
+            logger.info("🎮 GPU status: %s", nvidia_result.stdout.strip())
 
     def run_single_test(self, scenario: str, context_length: int, run_number: int) -> TestResult:
         """Run a single benchmark test with comprehensive monitoring.
@@ -141,6 +251,9 @@ class BenchmarkRunner:
         prompt = PromptGenerator.generate(scenario, context_length, self.config)
         prompt_file = self.results_dir / f"prompt_{test_id}.txt"
         prompt_file.write_text(prompt)
+        logger.debug(
+            "📝 Generated prompt with %d characters for %s scenario", len(prompt), scenario
+        )
 
         # Setup GPU monitoring
         monitor_file = self.results_dir / f"gpu_monitor_{test_id}.csv"
@@ -148,13 +261,32 @@ class BenchmarkRunner:
 
         # Run test with monitoring
         start_time = time.time()
+        logger.debug(
+            "🚀 Sending request to Ollama API at %s", datetime.now(tz=UTC).strftime("%H:%M:%S.%f")
+        )
+        logger.debug(
+            "📡 Model: %s, Prompt length: %d chars, Context length: %d",
+            self.config.model,
+            len(prompt),
+            context_length,
+        )
 
         with gpu_monitor.monitor():
-            ollama_response = self.ollama_client.generate(
-                model=self.config.model, prompt=prompt, context_length=context_length
-            )
+            try:
+                ollama_response = self.ollama_client.generate(
+                    model=self.config.model, prompt=prompt, context_length=context_length
+                )
+            except Exception as e:
+                logger.error("❌ Ollama generation failed: %s", str(e))
+                self._diagnose_ollama_failure()
+                raise
 
         end_time = time.time()
+        logger.debug(
+            "✅ Received response from Ollama at %s (took %.2fs)",
+            datetime.now(tz=UTC).strftime("%H:%M:%S.%f"),
+            end_time - start_time,
+        )
 
         # Save full response
         response_file = self.results_dir / f"ollama_response_{test_id}.json"
