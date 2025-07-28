@@ -1,0 +1,111 @@
+[project]
+name = "gpu-llm-benchmarking"
+version = "0.1.0"
+description = "Benchmarking tool for testing LLM inference performance across different context window sizes on various GPUs."
+readme = "README.md"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Tom Foster", email = "tom@tomfos.tr" }]
+maintainers = [{ name = "Tom Foster", email = "tom@tomfos.tr" }]
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Benchmark",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "paramiko>=3",
+    "python-dotenv>=1",
+    "requests>=2",
+    "vastai-sdk>=0",
+]
+
+[project.urls]
+Homepage = "https://git.tomfos.tr/tom/gpu-llm-benchmarking"
+"Bug Reports" = "https://git.tomfos.tr/tom/gpu-llm-benchmarking/issues"
+"Source" = "https://git.tomfos.tr/tom/gpu-llm-benchmarking"
+
+[dependency-groups]
+dev = ["ruff>=0", "uv>=0", "mypy>=1", "types-requests>=2", "types-paramiko>=3"]
+
+[tool.uv]
+package = true
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project.scripts]
+benchmark-llm = "scripts.llm_benchmark:main"
+
+[tool.setuptools]
+packages = { find = {} }
+
+[tool.ruff]
+cache-dir = "/tmp/.ruff_cache"
+fix = true
+line-length = 100
+preview = true
+show-fixes = false
+target-version = "py311"
+unsafe-fixes = true
+
+[tool.ruff.format]
+line-ending = "auto"
+skip-magic-trailing-comma = false
+
+[tool.ruff.lint]
+fixable = ["ALL"]
+ignore = [
+    "ANN401",  # use of Any type
+    "BLE001",  # blind Exception usage
+    "COM812",  # missing trailing comma
+    "CPY",     # flake8-copyright
+    "FBT",     # boolean arguments
+    "PLR0912", # too many branches
+    "PLR0913", # too many arguments
+    "PLR0915", # too many statements
+    "PLR0917", # too many positional arguments
+    "PLR6301", # method could be static
+    "RUF029",  # async methods that don't await
+    "S104",    # binding to all interfaces
+    "S110",    # passed exceptions
+    "S404",    # subprocess module usage (needed for nvidia-smi)
+    "S602",    # subprocess with shell=True
+    "S603",    # subprocess.run(check=False)
+    "S607",    # starting process with partial path
+    "TRY301",  # raise inside try block
+]
+select = ["ALL"]
+unfixable = [
+    "F841",   # local variable assigned but never used
+    "RUF100", # unused noqa comments
+    "T201",   # don't strip print statement
+]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+required-imports = ["from __future__ import annotations"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
+disallow_untyped_decorators = false
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+follow_imports = "normal"
+ignore_missing_imports = true

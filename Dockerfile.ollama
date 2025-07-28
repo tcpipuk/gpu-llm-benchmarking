@@ -1,0 +1,31 @@
+FROM ollama/ollama:latest
+
+# Install uv and additional utilities
+RUN apt-get update && apt-get install -y \
+    apt-utils \
+    curl \
+    openssh-server \
+    tmux \
+    git \
+    wget \
+    less \
+    locales \
+    sudo \
+    software-properties-common \
+    rsync \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Set path and working directory
+ENV PATH="/root/.local/bin:$PATH"
+WORKDIR /app
+
+# Copy project metadata and source code for installation
+COPY pyproject.toml uv.lock ./
+COPY scripts ./scripts/
+
+# Install Python dependencies using uv (excluding dev dependencies)
+RUN uv sync --no-dev
+
+# Custom entrypoint to keep container running and signal readiness
+ENTRYPOINT ["/bin/bash", "-c", "echo \"Container ready for Ollama setup and benchmarking.\" && tail -f /dev/null"]
